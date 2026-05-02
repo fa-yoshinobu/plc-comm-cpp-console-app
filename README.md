@@ -29,7 +29,7 @@ PlatformIO uses the registry package in `platformio.ini`:
 
 ```ini
 lib_deps =
-  fa-yoshinobu/slmp-connect-cpp-minimal@^0.4.1
+  fa-yoshinobu/slmp-connect-cpp-minimal@^0.4.9
 ```
 
 ## Quick Start
