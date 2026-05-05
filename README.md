@@ -1,5 +1,11 @@
 # SLMP C++ Minimal Console App
 
+[![ci](https://github.com/fa-yoshinobu/plc-comm-slmp-cpp-minimal-console-app/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-cpp-minimal-console-app/actions/workflows/ci.yml)
+
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
+[![Arduino](https://img.shields.io/badge/Arduino-00878F?logo=arduino&logoColor=white)](https://www.arduino.cc/)
+
 Interactive console applications for `plc-comm-slmp-cpp-minimal`.
 
 This repository hosts the board-specific console programs that were split out of the minimal library repository so the library can stay focused on the core and high-level API.
