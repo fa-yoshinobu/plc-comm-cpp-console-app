@@ -35,8 +35,12 @@ PlatformIO uses the registry package in `platformio.ini`:
 
 ```ini
 lib_deps =
-  https://github.com/fa-yoshinobu/plc-comm-slmp-cpp-minimal.git#0.4.9
+  fa-yoshinobu/slmp-connect-cpp-minimal@0.8.0
 ```
+
+The console sketches use the compact `SlmpClient` path only, so `platformio.ini`
+sets `SLMP_MINIMAL_ENABLE_HIGH_LEVEL=0`. This keeps both board builds on the
+latest registry package while avoiding unused high-level helper compilation.
 
 ## Quick Start
 
