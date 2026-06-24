@@ -6,7 +6,7 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![Arduino](https://img.shields.io/badge/Arduino-00878F?logo=arduino&logoColor=white)](https://www.arduino.cc/)
 
-Interactive console applications for `plc-comm-slmp-cpp-minimal`.
+Interactive console applications for the `slmp-connect-cpp-minimal` PlatformIO library.
 
 This repository hosts the board-specific console programs that were split out of the minimal library repository so the library can stay focused on the core and high-level API.
 
@@ -30,6 +30,8 @@ The Atom Matrix target is intentionally minimal and keeps only basic SLMP connec
 The console sketches depend on the SLMP minimal library:
 
 - PlatformIO Registry: <https://registry.platformio.org/libraries/fa-yoshinobu/slmp-connect-cpp-minimal>
+
+Naming note: this repository contains console applications. The reusable PlatformIO library dependency is `slmp-connect-cpp-minimal`.
 
 PlatformIO uses the registry package in `platformio.ini`:
 
