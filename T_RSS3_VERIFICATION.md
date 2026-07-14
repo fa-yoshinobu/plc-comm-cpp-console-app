@@ -40,16 +40,15 @@ The external-interface command accepts only GPIOs exposed on J4 and excludes the
 
 Use the local target when validating current uncommitted library changes. It links the sibling worktrees in place and adds nothing to either library repository:
 
-```powershell
-cd D:\APP\plc-comm-cpp-console-app
-& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e t-rss3-verification-console-local
+```bash
+pio run -e t-rss3-verification-console-local
 ```
 
 Use `t-rss3-verification-console` to compile against the exact registry package versions pinned in `platformio.ini`. For a hardware check of the current sibling worktrees, upload the already-built local target and open the monitor as separate operator actions:
 
-```powershell
-& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e t-rss3-verification-console-local -t upload
-& "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" device monitor -b 115200
+```bash
+pio run -e t-rss3-verification-console-local -t upload
+pio device monitor -b 115200
 ```
 
 The monitor should show `boot_policy=no_automatic_plc_communication read_only_commands_only`. It also prints a deterministic firmware build ID, the PlatformIO Core version included in that ID, the app commit/dirty-content ID, and dependency material IDs. The local target's dependency IDs contain the SLMP and MC commit/dirty-content IDs; the registry target identifies their pinned registry coordinates. A verification build fails instead of emitting an unknown source ID when required Git provenance cannot be read. Enter `status` and confirm `flash_bytes=8388608`, `psram_bytes=0`, and a successful `uart_effective ... query_ok=1 ... matches_requested=1` line before using the PLC interfaces.

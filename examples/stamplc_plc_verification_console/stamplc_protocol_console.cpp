@@ -1,7 +1,7 @@
-#include "t_rss3_plc_verification_console.h"
+#include "stamplc_protocol_console.h"
 
-#include "t_rss3_board.h"
-namespace plc_console_board = t_rss3_board;
+#include "stamplc_board.h"
+namespace plc_console_board = stamplc_board;
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
@@ -60,7 +60,7 @@ namespace plc_console_board = t_rss3_board;
 #define PLC_CONSOLE_UI_SOURCE_ID "unavailable"
 #endif
 
-namespace t_rss3_plc_verification_console {
+namespace stamplc_protocol_console {
 namespace {
 
 constexpr size_t kCommandCapacity = 256U;
@@ -1584,6 +1584,31 @@ void setupConsole() {
     printPrompt();
 }
 
+ConsoleSnapshot snapshot() {
+    return ConsoleSnapshot{
+        wifiConnected(),
+        g_slmp_host,
+        g_slmp_tcp_port,
+        g_slmp_udp_port,
+        slmpProfileName(g_slmp_profile),
+        mcInterfaceName(g_mc_settings.interface_kind),
+        mcProfileName(g_mc_settings.profile),
+        g_mc_settings.baud,
+        g_mc_settings.data_bits,
+        g_mc_settings.parity,
+        g_mc_settings.stop_bits,
+        g_mc_uart_ready,
+        g_mc_client.busy(),
+        g_mc_client.requires_transport_reset(),
+    };
+}
+
+void printConsoleStatus() {
+    Serial.println();
+    printStatus();
+    printPrompt();
+}
+
 void loopConsole() {
     pumpMcTx();
     pumpMcRx();
@@ -1595,4 +1620,4 @@ void loopConsole() {
     delay(1U);
 }
 
-}  // namespace t_rss3_plc_verification_console
+}  // namespace stamplc_protocol_console

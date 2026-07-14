@@ -77,18 +77,32 @@ else:
     slmp_source = "registry:slmp-connect-cpp-minimal@3.1.0"
     mc_source = "registry:mcprotocol-serial-cpp@3.1.0"
 
+ui_source = (
+    "registry:M5Unified@0.2.18+M5GFX@0.2.25"
+    if environment.startswith("stamplc-")
+    else "none"
+)
+
 build_material = "|".join(
-    (environment, "platformio:" + platformio_core, app_source, slmp_source, mc_source)
+    (
+        environment,
+        "platformio:" + platformio_core,
+        app_source,
+        slmp_source,
+        mc_source,
+        ui_source,
+    )
 )
 firmware_build_id = hashlib.sha256(build_material.encode("utf-8")).hexdigest()[:16]
 
 env.Append(
     CPPDEFINES=[
-        ("T_RSS3_BUILD_ENV", quoted_macro(environment)),
-        ("T_RSS3_PIO_CORE_VERSION", quoted_macro(platformio_core)),
-        ("T_RSS3_FIRMWARE_BUILD_ID", quoted_macro(firmware_build_id)),
-        ("T_RSS3_APP_SOURCE_ID", quoted_macro(app_source)),
-        ("T_RSS3_SLMP_SOURCE_ID", quoted_macro(slmp_source)),
-        ("T_RSS3_MC_SOURCE_ID", quoted_macro(mc_source)),
+        ("PLC_CONSOLE_BUILD_ENV", quoted_macro(environment)),
+        ("PLC_CONSOLE_PIO_CORE_VERSION", quoted_macro(platformio_core)),
+        ("PLC_CONSOLE_FIRMWARE_BUILD_ID", quoted_macro(firmware_build_id)),
+        ("PLC_CONSOLE_APP_SOURCE_ID", quoted_macro(app_source)),
+        ("PLC_CONSOLE_SLMP_SOURCE_ID", quoted_macro(slmp_source)),
+        ("PLC_CONSOLE_MC_SOURCE_ID", quoted_macro(mc_source)),
+        ("PLC_CONSOLE_UI_SOURCE_ID", quoted_macro(ui_source)),
     ]
 )

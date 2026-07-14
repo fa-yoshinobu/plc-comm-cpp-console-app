@@ -14,6 +14,7 @@ jobs:
           - m5stack-atom-console
           - wiznet_6300_evb_pico2
           - t-rss3-verification-console
+          - stamplc-verification-console
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -23,6 +24,6 @@ jobs:
         run: pip install platformio==6.1.19
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
-      - name: Analyze T-RSS3 owned sources
-        if: matrix.env == 't-rss3-verification-console'
-        run: pio check -e t-rss3-verification-console --severity medium --severity high --fail-on-defect medium --fail-on-defect high
+      - name: Analyze verification-console owned sources
+        if: matrix.env == 't-rss3-verification-console' || matrix.env == 'stamplc-verification-console'
+        run: pio check -e ${{ matrix.env }} --severity medium --severity high --fail-on-defect medium --fail-on-defect high
