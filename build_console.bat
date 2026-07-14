@@ -29,22 +29,28 @@ if /I "%TARGET%"=="atom" goto build_atom
 if /I "%TARGET%"=="w6300" goto build_w6300
 if /I "%TARGET%"=="trss3" goto build_trss3
 if /I "%TARGET%"=="trss3-local" goto build_trss3_local
+if /I "%TARGET%"=="stamplc" goto build_stamplc
+if /I "%TARGET%"=="stamplc-local" goto build_stamplc_local
 
-echo Usage: build_console.bat [all^|atom^|w6300^|trss3^|trss3-local]
+echo Usage: build_console.bat [all^|atom^|w6300^|trss3^|trss3-local^|stamplc^|stamplc-local]
 exit /b 1
 
 :build_all
 echo Using PLATFORMIO_CORE_DIR=%PLATFORMIO_CORE_DIR%
-echo [1/3] Building Atom Matrix console...
+echo [1/4] Building Atom Matrix console...
 "%PIO_EXE%" run -e m5stack-atom-console
 if %errorlevel% neq 0 exit /b %errorlevel%
 
-echo [2/3] Building W6300 console...
+echo [2/4] Building W6300 console...
 "%PIO_EXE%" run -e wiznet_6300_evb_pico2
 if %errorlevel% neq 0 exit /b %errorlevel%
 
-echo [3/3] Building T-RSS3 PLC verification console...
+echo [3/4] Building T-RSS3 PLC verification console...
 "%PIO_EXE%" run -e t-rss3-verification-console
+if %errorlevel% neq 0 exit /b %errorlevel%
+
+echo [4/4] Building M5Stack StamPLC verification console...
+"%PIO_EXE%" run -e stamplc-verification-console
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo [SUCCESS] All console targets built successfully.
@@ -72,4 +78,16 @@ exit /b %errorlevel%
 echo Using PLATFORMIO_CORE_DIR=%PLATFORMIO_CORE_DIR%
 echo Building T-RSS3 console with sibling library worktrees...
 "%PIO_EXE%" run -e t-rss3-verification-console-local
+exit /b %errorlevel%
+
+:build_stamplc
+echo Using PLATFORMIO_CORE_DIR=%PLATFORMIO_CORE_DIR%
+echo Building M5Stack StamPLC console with registry libraries...
+"%PIO_EXE%" run -e stamplc-verification-console
+exit /b %errorlevel%
+
+:build_stamplc_local
+echo Using PLATFORMIO_CORE_DIR=%PLATFORMIO_CORE_DIR%
+echo Building M5Stack StamPLC console with sibling library worktrees...
+"%PIO_EXE%" run -e stamplc-verification-console-local
 exit /b %errorlevel%
