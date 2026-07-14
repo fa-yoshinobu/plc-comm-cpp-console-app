@@ -1,21 +1,20 @@
 # Console Examples
 
-This repository keeps the interactive console programs that were split out of `plc-comm-slmp-cpp-minimal`.
+Board-specific applications live here so the reusable C++ library repositories remain small and their CI does not acquire firmware-only files.
 
-## Included Examples
+## Included examples
 
-- `atom_matrix_serial_console`
-- `w6300_evb_pico2_serial_console`
+- `t_rss3_plc_verification_console`: Wi-Fi SLMP plus RS-232/RS-485 MC serial read verification on the LILYGO T-RSS3 ESP32-S3.
+- `atom_matrix_serial_console`: compact M5Stack Atom SLMP console.
+- `w6300_evb_pico2_serial_console`: W6300 SLMP dashboard and console.
 
 ## Build
 
 ```bash
+pio run -e t-rss3-verification-console
+pio run -e t-rss3-verification-console-local
 pio run -e m5stack-atom-console
 pio run -e wiznet_6300_evb_pico2
 ```
 
-## W6300 PC CLI
-
-```bash
-python scripts/w6300_console_cli.py --help
-```
+See [the T-RSS3 verification guide](../T_RSS3_VERIFICATION.md) before wiring or running hardware checks.

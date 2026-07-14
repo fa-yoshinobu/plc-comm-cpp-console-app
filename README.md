@@ -1,88 +1,69 @@
-# SLMP C++ Minimal Console App
+# PLC Comm C++ Console App
 
-[![ci](https://github.com/fa-yoshinobu/plc-comm-slmp-cpp-minimal-console-app/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-slmp-cpp-minimal-console-app/actions/workflows/ci.yml)
+[![ci](https://github.com/fa-yoshinobu/plc-comm-cpp-console-app/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-cpp-console-app/actions/workflows/ci.yml)
 
-[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![Arduino](https://img.shields.io/badge/Arduino-00878F?logo=arduino&logoColor=white)](https://www.arduino.cc/)
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-F5822A?logo=platformio&logoColor=white)](https://platformio.org/)
 
-Interactive console applications for the `slmp-connect-cpp-minimal` PlatformIO library.
+Board applications for exercising the PLC communication C++ libraries without adding board-specific files to the library repositories.
 
-This repository hosts the board-specific console programs that were split out of the minimal library repository so the library can stay focused on the core and high-level API.
+## Console targets
 
-## Included Console Targets
+- `t-rss3-verification-console`: T-RSS3 ESP32-S3 verification firmware using the published SLMP and MC serial packages.
+- `t-rss3-verification-console-local`: the same firmware built from the sibling `plc-comm-slmp-cpp-minimal` and `plc-comm-mcprotocol-serial-cpp` worktrees.
+- `m5stack-atom-console`: compact SLMP console.
+- `wiznet_6300_evb_pico2`: W6300 SLMP dashboard and console.
 
-- `examples/w6300_evb_pico2_serial_console`
-- `examples/atom_matrix_serial_console`
+The T-RSS3 firmware supports:
 
-The W6300 target is the primary demo application. It now focuses on a richer ANSI dashboard that shows:
+- SLMP TCP word reads over Wi-Fi.
+- SLMP TCP keepalive inspection plus a second read on the same socket after more than 30 seconds idle.
+- SLMP UDP word reads with local port `0` requested for an ephemeral bind.
+- MC protocol C4 ASCII Format 4 CPU-model and word reads through onboard RS-232 or RS-485.
+- Configurable UART baud, 7/8 data bits, N/E/O parity, 1/2 stop bits, and optional hardware RTS/CTS through an external level adapter.
+- Machine-readable `RESULT` lines and ESP-IDF UART effective-setting output.
 
-- live connection and route settings
-- quick read / quick write actions
-- watch slots and batch reads
-- stress counters and latency
-- system metrics such as estimated CPU load and free heap
+No PLC frame is sent at boot, and the T-RSS3 console intentionally provides no write command. See [T_RSS3_VERIFICATION.md](T_RSS3_VERIFICATION.md) for wiring, commands, and evidence boundaries.
 
-The Atom Matrix target is intentionally minimal and keeps only basic SLMP connectivity and read/write commands.
+## Build
 
-## Dependency
+Published packages:
 
-The console sketches depend on the SLMP minimal library:
-
-- PlatformIO Registry: <https://registry.platformio.org/libraries/fa-yoshinobu/slmp-connect-cpp-minimal>
-
-Naming note: this repository contains console applications. The reusable PlatformIO library dependency is `slmp-connect-cpp-minimal`.
-
-PlatformIO uses the registry package in `platformio.ini`:
-
-```ini
-lib_deps =
-  fa-yoshinobu/slmp-connect-cpp-minimal@0.8.0
+```bash
+python -m platformio run -e t-rss3-verification-console
 ```
 
-The console sketches use the compact `SlmpClient` path only, so `platformio.ini`
-sets `SLMP_MINIMAL_ENABLE_HIGH_LEVEL=0`. This keeps both board builds on the
-latest registry package while avoiding unused high-level helper compilation.
+Current sibling worktrees, including the SLMP profile changes under development:
 
-## Quick Start
+```bash
+python -m platformio run -e t-rss3-verification-console-local
+```
+
+Windows helpers:
+
+```bat
+build_console.bat trss3
+build_console.bat trss3-local
+build_console.bat all
+```
+
+The local target expects this sibling layout and does not copy or generate files in either library repository:
+
+```text
+D:\APP\plc-comm-cpp-console-app
+D:\APP\plc-comm-slmp-cpp-minimal
+D:\APP\plc-comm-mcprotocol-serial-cpp
+```
+
+The published-package target is part of CI. The local target is deliberately excluded from CI because sibling worktrees are not available on a clean GitHub runner.
+
+## Existing targets
 
 ```bash
 python -m platformio run -e m5stack-atom-console
 python -m platformio run -e wiznet_6300_evb_pico2
-```
-
-For repeated local builds on Windows, use the helper script so the same PlatformIO cache directory is reused:
-
-```bat
-build_console.bat
-build_console.bat w6300
-build_console.bat atom
-```
-
-By default the helper scripts use a short cache path on the current drive:
-
-```text
-%~d0\pio
-```
-
-If another machine needs a different cache location, set `PLATFORMIO_CORE_DIR` before running the scripts.
-
-`cmd.exe`:
-
-```bat
-set PLATFORMIO_CORE_DIR=E:\pio-cache
-build_console.bat w6300
-```
-
-PowerShell:
-
-```powershell
-$env:PLATFORMIO_CORE_DIR = 'E:\pio-cache'
-cmd /c build_console.bat w6300
-```
-
-For the W6300 console CLI:
-
-```bash
 python scripts/w6300_console_cli.py --help
 ```
+
+By default the Windows helper scripts use `%~d0\pio` for the PlatformIO cache. Set `PLATFORMIO_CORE_DIR` before running a helper when another cache location is required.
