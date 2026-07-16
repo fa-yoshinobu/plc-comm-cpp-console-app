@@ -508,7 +508,9 @@ void runSlmpTcpKeepAlive(uint32_t device_number, uint32_t idle_ms) {
     const int fd_after = g_slmp_tcp_socket.fd();
     uint16_t after_value = 0U;
     const bool second_read_ok = readSlmpWord(g_slmp_tcp_client, device_number, after_value);
-    const bool pass = keepalive_readable && keepalive_enabled == 1 && keepalive_idle == 30 &&
+    // lwIP returns the enabled SOF_KEEPALIVE bit (0x08) rather than a
+    // normalized boolean value, so any nonzero result means enabled.
+    const bool pass = keepalive_readable && keepalive_enabled != 0 && keepalive_idle == 30 &&
                       fd_before >= 0 && fd_before == fd_after && second_read_ok;
     Serial.print(F("RESULT test="));
     Serial.print(kTest);

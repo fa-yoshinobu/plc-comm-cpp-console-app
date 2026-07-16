@@ -87,6 +87,10 @@ slmp udp-read D100
 slmp tcp-keepalive D100 35000
 ```
 
+A TCP keepalive `PASS` requires a nonzero `SO_KEEPALIVE` value, `TCP_KEEPIDLE=30`, the same socket descriptor across the requested idle period, and a successful second read. ESP32's lwIP can return its enabled `SOF_KEEPALIVE` bit value `8` instead of a normalized Boolean `1`.
+
+A successful UDP reply proves that the socket requested with local port `0` was usable. ESP32 Arduino 2.0.17 does not expose the assigned local port through the public `WiFiUDP` API, so evidence of the exact numeric ephemeral port requires capture at the PLC or network side.
+
 The local-worktree target also exposes SLMP profile surface that exists only in the current sibling worktree. `help` reports the exact aliases compiled into the selected target.
 
 ## MC serial commands

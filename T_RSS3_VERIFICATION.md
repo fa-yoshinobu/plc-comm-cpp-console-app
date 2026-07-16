@@ -81,7 +81,7 @@ To verify the ESP32 TCP transport settings and reuse after an idle period:
 slmp tcp-keepalive D100 35000
 ```
 
-A `PASS` proves that `SO_KEEPALIVE=1` and `TCP_KEEPIDLE=30` were read back, the file descriptor remained the same, and the second PLC read succeeded after the requested idle period. Packet-level proof that a keepalive probe appeared on the wire still requires a network capture.
+A `PASS` proves that a nonzero `SO_KEEPALIVE` value and `TCP_KEEPIDLE=30` were read back, the file descriptor remained the same, and the second PLC read succeeded after the requested idle period. ESP32's lwIP can return its enabled `SOF_KEEPALIVE` bit value `8` instead of a normalized Boolean `1`. Packet-level proof that a keepalive probe appeared on the wire still requires a network capture.
 
 To exercise UDP local-port-zero binding:
 
