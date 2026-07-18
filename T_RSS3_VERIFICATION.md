@@ -144,4 +144,6 @@ The confirmation argument is intentional: the command emits a 16-byte non-MC dia
 
 Each completed communication command emits one `RESULT test=... status=PASS|FAIL` line. Preserve that line together with the firmware/source IDs, the preceding `status` and `uart_effective` output, the connected PLC/profile, endpoint or wiring, and the tested address.
 
+Maintainer-facing live results and their verification boundaries are recorded in [T-RSS3 live verification evidence](maintainer/T_RSS3_LIVE_VERIFICATION.md).
+
 T-RSS3 results are MCU transport evidence. They do not by themselves close a host-backend requirement that specifically names Windows/POSIX `COM3`, nor do they prove onboard RTS/CTS because the board DB9 has no RTS/CTS signals. Those checks require their named host platform or the documented external adapter, respectively.
