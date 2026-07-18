@@ -24,6 +24,11 @@ namespace plc_console_board = t_rss3_board;
 #include "mcprotocol/serial/version.hpp"
 #include <slmp_arduino_transport.h>
 
+// The MC codec uses a 4 KiB bounded frame workspace on the caller's stack.
+// Arduino-ESP32's default 8 KiB loop task is too small for that workspace plus
+// the console command path and trips the stack canary before transmission.
+SET_LOOP_TASK_STACK_SIZE(24U * 1024U);
+
 #ifndef PLC_CONSOLE_SLMP_HAS_MXR_RJ71_PROFILE
 #define PLC_CONSOLE_SLMP_HAS_MXR_RJ71_PROFILE 0
 #endif
@@ -73,6 +78,7 @@ constexpr size_t kMcMaxReadPoints = 8U;
 constexpr uint32_t kDefaultSlmpTimeoutMs = 3000U;
 constexpr uint32_t kDefaultKeepAliveTestIdleMs = 35000U;
 constexpr uint32_t kMcTxCompletionTimeoutMs = 3000U;
+constexpr uint32_t kMcRs232LoopbackTimeoutMs = 1000U;
 constexpr slmp::TargetAddress kSlmpTarget = {
     0x00U,
     0xFFU,
@@ -123,6 +129,11 @@ enum class McInterface : uint8_t {
     ExternalRtsCts,
 };
 
+enum class McFrameMode : uint8_t {
+    C4BinaryFormat5,
+    C4AsciiFormat4,
+};
+
 enum class McOperation : uint8_t {
     None,
     WordRead,
@@ -132,6 +143,7 @@ enum class McOperation : uint8_t {
 struct McSettings {
     McInterface interface_kind =
         plc_console_board::kHasOnboardRs232 ? McInterface::Rs232 : McInterface::Rs485;
+    McFrameMode frame_mode = McFrameMode::C4BinaryFormat5;
     mcprotocol::serial::PlcProfile profile = mcprotocol::serial::PlcProfile::MelsecIqR;
     uint32_t baud = plc_console_board::kDefaultMcBaud;
     uint8_t data_bits = 8U;
@@ -496,7 +508,9 @@ void runSlmpTcpKeepAlive(uint32_t device_number, uint32_t idle_ms) {
     const int fd_after = g_slmp_tcp_socket.fd();
     uint16_t after_value = 0U;
     const bool second_read_ok = readSlmpWord(g_slmp_tcp_client, device_number, after_value);
-    const bool pass = keepalive_readable && keepalive_enabled == 1 && keepalive_idle == 30 &&
+    // lwIP returns the enabled SOF_KEEPALIVE bit (0x08) rather than a
+    // normalized boolean value, so any nonzero result means enabled.
+    const bool pass = keepalive_readable && keepalive_enabled != 0 && keepalive_idle == 30 &&
                       fd_before >= 0 && fd_before == fd_after && second_read_ok;
     Serial.print(F("RESULT test="));
     Serial.print(kTest);
@@ -566,6 +580,16 @@ const char* mcInterfaceName(McInterface value) {
             return "rs485-onboard";
         case McInterface::ExternalRtsCts:
             return "external-rtscts";
+    }
+    return "unknown";
+}
+
+const char* mcFrameModeName(McFrameMode value) {
+    switch (value) {
+        case McFrameMode::C4BinaryFormat5:
+            return "c4-binary-format5";
+        case McFrameMode::C4AsciiFormat4:
+            return "c4-ascii-format4";
     }
     return "unknown";
 }
@@ -718,6 +742,12 @@ uint32_t serialConfigValue(uint8_t data_bits, char parity, uint8_t stop_bits) {
 }
 
 mcprotocol::serial::ProtocolConfig makeMcProtocol() {
+    if (g_mc_settings.frame_mode == McFrameMode::C4BinaryFormat5) {
+        return mcprotocol::serial::ProtocolConfig::c4_binary(
+            g_mc_settings.profile,
+            mcprotocol::serial::SumCheckMode::Disabled,
+            mcprotocol::serial::RouteConfig{mcprotocol::serial::HostStationRoute{}});
+    }
     return mcprotocol::serial::ProtocolConfig::ascii(
         mcprotocol::serial::AsciiFrameKind::C4,
         mcprotocol::serial::AsciiFormat::Format4,
@@ -910,6 +940,88 @@ bool requireVerifiedMcUart(const char* test_name) {
     return false;
 }
 
+void runMcRs232Loopback() {
+    if (!plc_console_board::kHasOnboardRs232 ||
+        g_mc_settings.interface_kind != McInterface::Rs232) {
+        Serial.println(F("RESULT test=mc-rs232-loopback status=FAIL reason=onboard_rs232_not_selected"));
+        return;
+    }
+    if (g_mc_client.busy() || g_mc_request_active) {
+        Serial.println(F("RESULT test=mc-rs232-loopback status=FAIL reason=request_busy"));
+        return;
+    }
+    if (!requireVerifiedMcUart("mc-rs232-loopback")) {
+        return;
+    }
+
+    // This deliberately invalid protocol pattern is permitted only with the
+    // PLC cable removed and the T-RSS3 DB9 RX/TX pins (2 and 3) shorted.
+    static constexpr uint8_t kPattern[] = {
+        0x00U, 0xFFU, 0x55U, 0xAAU, 0x11U, 0x22U, 0x44U, 0x88U,
+        0x7EU, 0x81U, 0x33U, 0xCCU, 0x5AU, 0xA5U, 0x0FU, 0xF0U,
+    };
+    uint8_t received[sizeof(kPattern)] = {};
+    size_t received_count = 0U;
+    size_t extra_count = 0U;
+
+    drainMcUart();
+    const size_t written = g_mc_uart->write(kPattern, sizeof(kPattern));
+    const bool tx_completed =
+        written == sizeof(kPattern) &&
+        uart_wait_tx_done(
+            g_mc_uart_port,
+            pdMS_TO_TICKS(kMcTxCompletionTimeoutMs)) == ESP_OK;
+    if (tx_completed) {
+        const uint32_t started_ms = millis();
+        while (received_count < sizeof(received) &&
+               static_cast<uint32_t>(millis() - started_ms) < kMcRs232LoopbackTimeoutMs) {
+            while (g_mc_uart->available() > 0 && received_count < sizeof(received)) {
+                const int value = g_mc_uart->read();
+                if (value >= 0) {
+                    received[received_count++] = static_cast<uint8_t>(value);
+                }
+            }
+            if (received_count < sizeof(received)) {
+                delay(1U);
+            }
+        }
+        delay(20U);
+        while (g_mc_uart->available() > 0) {
+            if (g_mc_uart->read() >= 0) {
+                ++extra_count;
+            }
+        }
+    }
+
+    const bool exact_echo =
+        tx_completed && received_count == sizeof(kPattern) && extra_count == 0U &&
+        memcmp(received, kPattern, sizeof(kPattern)) == 0;
+    Serial.print(F("RESULT test=mc-rs232-loopback status="));
+    Serial.print(exact_echo ? F("PASS") : F("FAIL"));
+    Serial.print(F(" interface=rs232-onboard serial="));
+    Serial.print(g_mc_settings.baud);
+    Serial.print('/');
+    Serial.print(g_mc_settings.data_bits);
+    Serial.print(g_mc_settings.parity);
+    Serial.print(g_mc_settings.stop_bits);
+    Serial.print(F(" sent="));
+    Serial.print(written);
+    Serial.print(F(" received="));
+    Serial.print(received_count);
+    Serial.print(F(" extra="));
+    Serial.print(extra_count);
+    Serial.print(F(" exact="));
+    Serial.print(exact_echo ? 1 : 0);
+    if (!tx_completed) {
+        Serial.print(F(" reason=tx_incomplete"));
+    } else if (received_count == 0U) {
+        Serial.print(F(" reason=no_echo"));
+    } else if (!exact_echo) {
+        Serial.print(F(" reason=echo_mismatch"));
+    }
+    Serial.println();
+}
+
 void mcCompletion(void*, mcprotocol::serial::Status status) {
     g_mc_completion_status = status;
     g_mc_request_active = false;
@@ -1067,6 +1179,8 @@ void reportMcResult() {
     Serial.print(g_mc_completion_status.ok() ? F("PASS") : F("FAIL"));
     Serial.print(F(" interface="));
     Serial.print(mcInterfaceName(g_mc_settings.interface_kind));
+    Serial.print(F(" frame="));
+    Serial.print(mcFrameModeName(g_mc_settings.frame_mode));
     Serial.print(F(" profile="));
     Serial.print(mcProfileName(g_mc_settings.profile));
     Serial.print(F(" serial="));
@@ -1123,6 +1237,8 @@ void printMcStatus() {
     }
     Serial.print(F("mc_interface="));
     Serial.print(mcInterfaceName(g_mc_settings.interface_kind));
+    Serial.print(F(" mc_frame="));
+    Serial.print(mcFrameModeName(g_mc_settings.frame_mode));
     Serial.print(F(" mc_profile="));
     Serial.print(mcProfileName(g_mc_settings.profile));
     Serial.print(F(" serial="));
@@ -1187,6 +1303,7 @@ void printHelp() {
     Serial.println(F("slmp tcp-read D100"));
     Serial.println(F("slmp tcp-keepalive D100 [idle_ms=30001..600000]"));
     Serial.println(F("slmp udp-read D100"));
+    Serial.println(F("mc frame <c4-binary-format5|c4-ascii-format4>"));
     Serial.println(F("mc profile <iqr|q>"));
     if (plc_console_board::kHasOnboardRs232) {
         Serial.println(F("mc interface <rs232|rs485>"));
@@ -1199,6 +1316,7 @@ void printHelp() {
     Serial.println(F("mc serial <baud=1200..256000> <7|8> <N|E|O> <1|2>"));
     if (plc_console_board::kHasOnboardRs232) {
         Serial.println(F("mc preset <iqr-rs232|q-rs232|iqr-rs485|q-rs485>"));
+        Serial.println(F("mc rs232-loopback disconnected-pins-2-3  (PLC cable removed)"));
     } else {
         Serial.println(F("mc preset <iqr-rs485|q-rs485>"));
     }
@@ -1310,6 +1428,7 @@ void applyMcPreset(const char* name) {
         Serial.println(F("mc preset rejected"));
         return;
     }
+    g_mc_settings.frame_mode = McFrameMode::C4BinaryFormat5;
     g_mc_settings.baud = plc_console_board::kDefaultMcBaud;
     g_mc_settings.data_bits = 8U;
     g_mc_settings.parity = 'E';
@@ -1322,7 +1441,26 @@ void handleMcCommand(char* tokens[], size_t count) {
         printMcStatus();
         return;
     }
-    if (equalsIgnoreCase(tokens[1], "profile")) {
+    if (equalsIgnoreCase(tokens[1], "frame")) {
+        if (count != 3U || g_mc_client.busy()) {
+            Serial.println(F("mc frame usage: mc frame <c4-binary-format5|c4-ascii-format4>"));
+            return;
+        }
+        if (g_mc_client.requires_transport_reset()) {
+            Serial.println(F("mc frame rejected: transport reset required; use mc reset first"));
+            return;
+        }
+        if (equalsIgnoreCase(tokens[2], "c4-binary-format5")) {
+            g_mc_settings.frame_mode = McFrameMode::C4BinaryFormat5;
+        } else if (equalsIgnoreCase(tokens[2], "c4-ascii-format4")) {
+            g_mc_settings.frame_mode = McFrameMode::C4AsciiFormat4;
+        } else {
+            Serial.println(F("mc frame usage: mc frame <c4-binary-format5|c4-ascii-format4>"));
+            return;
+        }
+        (void)configureMcClient();
+        printMcStatus();
+    } else if (equalsIgnoreCase(tokens[1], "profile")) {
         mcprotocol::serial::PlcProfile profile = mcprotocol::serial::PlcProfile::Unspecified;
         if (count != 3U || !parseMcProfile(tokens[2], profile) || g_mc_client.busy()) {
             Serial.println(F("mc profile rejected"));
@@ -1423,6 +1561,14 @@ void handleMcCommand(char* tokens[], size_t count) {
             return;
         }
         startMcCpuModelRead();
+    } else if (equalsIgnoreCase(tokens[1], "rs232-loopback")) {
+        if (count != 3U ||
+            !equalsIgnoreCase(tokens[2], "disconnected-pins-2-3")) {
+            Serial.println(F("mc rs232-loopback usage: mc rs232-loopback disconnected-pins-2-3"));
+            Serial.println(F("PLC cable must be removed and T-RSS3 DB9 pins 2 and 3 shorted"));
+            return;
+        }
+        runMcRs232Loopback();
     } else if (equalsIgnoreCase(tokens[1], "reset")) {
         if (g_mc_client.busy()) {
             Serial.println(F("mc reset rejected: request busy"));

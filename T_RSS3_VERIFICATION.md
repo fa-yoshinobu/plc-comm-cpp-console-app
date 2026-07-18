@@ -7,20 +7,21 @@ This firmware turns the LILYGO T-RSS3 ESP32-S3 into an explicit-command verifica
 - Attach the external Wi-Fi antenna before power/reset. The board uses an external-antenna module. This firmware keeps Wi-Fi off until `wifi connect` is entered.
 - The firmware does not connect to Wi-Fi or send any PLC frame at boot.
 - Only CPU-model reads and direct word reads from `D` devices are exposed. There is no PLC write command.
+- The RS-232 loopback command sends a non-MC diagnostic pattern. Run it only after removing the PLC cable and shorting T-RSS3 DB9 pins 2 and 3.
 - Uploading or opening the USB monitor does not start a PLC test. A test begins only when its command is entered.
 - Do not power the board from multiple sources unless the board documentation confirms the intended power arrangement.
 
 ## Board definition and pins
 
-The local PlatformIO board definition is `boards/esp32s3_nopsram.json`: ESP32-S3, 240 MHz, 8 MB flash, QIO at 80 MHz, and no PSRAM. The `status` command reports the detected chip, flash capacity and clock, PSRAM size, and free heap. It does not detect QIO versus DIO. A successful boot of the built image is the runtime check for the configured QIO mode.
+The local PlatformIO board definition is `boards/esp32s3_nopsram.json`: ESP32-S3, 240 MHz, 8 MB flash, DIO at 80 MHz, and no PSRAM. The `status` command reports the detected chip, flash capacity and clock, PSRAM size, and free heap. It does not detect QIO versus DIO. A successful boot of the built image is the runtime check for the configured DIO mode.
 
-The vendor board definition and IDE material say 8 MB/no PSRAM/QIO, while an available schematic label says `ESP32-S3-MINI-1U-N4` and a factory image header says DIO. Therefore the physical board's reported 8 MB capacity and successful boot of this QIO build must be retained as evidence; the schematic label alone is not treated as the installed-module truth.
+The vendor board definition and IDE material say 8 MB/no PSRAM/QIO, while an available schematic label says `ESP32-S3-MINI-1U-N4` and a factory image header says DIO. The verification target uses DIO because the physical T-RSS3 fails during QIO bootloader loading and the factory image also selects DIO. Retain the reported 8 MB capacity and successful DIO boot as the board evidence.
 
 | Function | T-RSS3 connection |
 | --- | --- |
 | USB CDC console | Native USB, 115200 baud monitor setting |
-| Onboard RS-232 TX | DB9 pin 3 |
-| Onboard RS-232 RX | DB9 pin 2 |
+| Onboard RS-232 TX | DB9 pin 2 |
+| Onboard RS-232 RX | DB9 pin 3 |
 | RS-232 isolated signal ground | DB9 pin 1 and pin 5 |
 | Onboard RS-485 SGND | H2 pin 1 |
 | Onboard RS-485 A | H2 pin 2 |
@@ -28,7 +29,9 @@ The vendor board definition and IDE material say 8 MB/no PSRAM/QIO, while an ava
 | RS-485 UART RX/TX/direction | GPIO 2 / GPIO 3 / GPIO 4 |
 | Onboard RS-232 UART TX/RX | GPIO 41 / GPIO 42 |
 
-DB9 pin 1 is tied to the board's isolated signal ground, although peer equipment commonly uses pin 1 for DCD or another signal. Use a deliberately wired three-conductor cable carrying only pins 2, 3, and 5, or verify every connected peer pin before using any fuller cable. Whether pins 2 and 3 are straight-through or crossed depends on the PLC connector role; do not infer it from DB9 gender. Add RS-485 termination and biasing according to the complete bus, not merely at the ESP32 end.
+DB9 pin 1 is tied to the board's isolated signal ground, although peer equipment commonly uses pin 1 for DCD or another signal. Use a deliberately wired three-conductor cable carrying only pins 2, 3, and 5, or verify every connected peer pin before using any fuller cable. The T-RSS3 data pins are DCE-style: pin 2 transmits and pin 3 receives. An RJ71C24-R2 direct connection therefore uses straight-through data wiring: T-RSS3 pin 2 to RJ71C24-R2 pin 2 (RD), T-RSS3 pin 3 to RJ71C24-R2 pin 3 (SD), and pin 5 to pin 5 (SG). Do not infer another peer's wiring from DB9 gender. Add RS-485 termination and biasing according to the complete bus, not merely at the ESP32 end.
+
+The T-RSS3 connection exposes no RS-232 hardware-handshake lines. For a three-wire RJ71C24-R2 connection, set RS/CS control to disabled. The RJ71C24-R2 transmission-control selector has no `None` value; select DC-code control, then disable both DC1/DC3 and DC2/DC4 control. Do not select DTR/DSR control for this connection.
 
 H1 accepts 7–24 V DC with pin 1 positive and pin 2 ground. J4 pin 30 is the 3.3 V logic supply and J4 pin 7 is logic ground. GPIOs are 3.3 V only. H2 pin 1 and DB9 pins 1/5 are isolated-side signal ground; never substitute them for J4 logic ground because doing so defeats the onboard isolation boundary.
 
@@ -78,7 +81,7 @@ To verify the ESP32 TCP transport settings and reuse after an idle period:
 slmp tcp-keepalive D100 35000
 ```
 
-A `PASS` proves that `SO_KEEPALIVE=1` and `TCP_KEEPIDLE=30` were read back, the file descriptor remained the same, and the second PLC read succeeded after the requested idle period. Packet-level proof that a keepalive probe appeared on the wire still requires a network capture.
+A `PASS` proves that a nonzero `SO_KEEPALIVE` value and `TCP_KEEPIDLE=30` were read back, the file descriptor remained the same, and the second PLC read succeeded after the requested idle period. ESP32's lwIP can return its enabled `SOF_KEEPALIVE` bit value `8` instead of a normalized Boolean `1`. Packet-level proof that a keepalive probe appeared on the wire still requires a network capture.
 
 To exercise UDP local-port-zero binding:
 
@@ -90,7 +93,7 @@ A successful reply proves that the socket requested with local port `0` was usab
 
 ## MC serial commands
 
-The MC client uses C4 ASCII Format 4, the selected PLC profile, no sum check, and the direct host-station route. Presets start at 19200 baud, 8 data bits, even parity, and 1 stop bit:
+The MC client exposes two frame/code combinations for the iQ-R and Q profiles: C4 Binary Format 5 and C4 ASCII Format 4. It uses no sum check and the direct host-station route. Presets select C4 Binary Format 5 and start at 19200 baud, 8 data bits, even parity, and 1 stop bit:
 
 ```text
 mc preset iqr-rs232
@@ -100,6 +103,13 @@ mc read D100 1
 mc preset q-rs485
 mc model
 mc read D100 1
+```
+
+Select the frame explicitly when checking a different module configuration. The selected value is included in `mc status` and every completed MC `RESULT` line:
+
+```text
+mc frame c4-binary-format5
+mc frame c4-ascii-format4
 ```
 
 Override the UART format when the PLC station is configured differently:
@@ -120,6 +130,15 @@ mc read D100 1
 ```
 
 Every UART change prints both the requested pins/settings and the effective ESP-IDF driver values. A request is rejected unless all effective values match. TX completion has a finite three-second deadline, so missing CTS cannot freeze the console; a timeout destroys the UART session and requires `mc reset`. RS-485 direction control is asserted only around the transmitted request and is returned to receive mode immediately after the UART reports physical TX completion.
+
+To isolate the onboard RS-232 transmitter, receiver, and level-converter path from PLC settings and cable wiring, disconnect the PLC cable, short only DB9 pins 2 and 3 on the T-RSS3, and run:
+
+```text
+mc preset iqr-rs232
+mc rs232-loopback disconnected-pins-2-3
+```
+
+The confirmation argument is intentional: the command emits a 16-byte non-MC diagnostic pattern and must not be used while any PLC or other peer is connected. `PASS` requires an exact 16-byte echo with no missing, changed, or extra bytes. Remove the short before reconnecting the PLC.
 
 ## Evidence boundary
 
